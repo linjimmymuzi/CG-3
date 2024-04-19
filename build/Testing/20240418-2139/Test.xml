@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Site BuildName="(empty)"
+	BuildStamp="20240418-2139-Experimental"
+	Name="(empty)"
+	Generator="ctest-3.28.1"
+	CompilerName=""
+	CompilerVersion=""
+	OSName="macOS"
+	Hostname="muzideMacBook-Pro.local"
+	OSRelease="13.2.1"
+	OSVersion="22D68"
+	OSPlatform="x86_64"
+	Is64Bits="1"
+	VendorString="GenuineIntel"
+	VendorID="Intel Corporation"
+	FamilyID="6"
+	ModelID="158"
+	ProcessorCacheSize="32768"
+	NumberOfLogicalCPU="12"
+	NumberOfPhysicalCPU="6"
+	TotalVirtualMemory="5120"
+	TotalPhysicalMemory="16384"
+	LogicalProcessorsPerPhysical="8"
+	ProcessorClockFrequency="2600"
+	>
+	<Testing>
+		<StartDateTime>Apr 18 14:39 PDT</StartDateTime>
+		<StartTestTime>1713476372</StartTestTime>
+		<TestList/>
+		<EndDateTime>Apr 18 14:39 PDT</EndDateTime>
+		<EndTestTime>1713476372</EndTestTime>
+		<ElapsedMinutes>0</ElapsedMinutes>
+	</Testing>
+</Site>
