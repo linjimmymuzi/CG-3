@@ -27,6 +27,7 @@
 #include <imageIO.h>
 #include <vector>
 #include <glm/glm.hpp>
+#include <algorithm>
 
 #define MAX_TRIANGLES 20000
 #define MAX_SPHERES 100
@@ -45,7 +46,7 @@ int mode = MODE_DISPLAY;
 // However, for your own purposes, after you have solved the homework, you can increase those values to obtain higher-resolution images.
 #define WIDTH 640
 #define HEIGHT 480
-double aspectRatio = WIDTH /HEIGHT;
+double aspectRatio = WIDTH /(HEIGHT * 1.0);
 
 // The field of view of the camera, in degrees.
 #define fov 60.0
@@ -96,78 +97,13 @@ glm::vec3 crossProduct(glm::vec3 vec0, glm::vec3 vec1) {
     return vec2;
 }
 
-glm::vec3 crossProduct(glm::vec3 vec0, glm::vec3 vec1) {
-    glm::vec3 vec2;
-    vec2.x = vec0.y * vec1.z - vec0.z * vec1.y;
-    vec2.y = vec0.z * vec1.x - vec0.x * vec1.z;
-    vec2.z = vec0.x * vec1.y - vec0.y * vec1.x;
-    return vec2;
-}
-
 float dotProduct(glm::vec3 vec0, glm::vec3 vec1) {
     return vec0.x * vec1.x + vec0.y * vec1.y + vec0.z * vec1.z;
 }
 
-bool IntersectSpheres(const Ray &ray, const Sphere &sphere, glm::vec3 &intersect) {
-    glm::vec3 oc;
-    oc.x = ray.origin.x - sphere.position[0];
-    oc.y = ray.origin.y - sphere.position[1];
-    oc.z = ray.origin.z - sphere.position[2];
-
-    float a = glm::dot(ray.direction, ray.direction);
-    float b = 2.0 * glm::dot(oc, ray.direction);
-    float c = glm::dot(oc, oc) - sphere.radius * sphere.radius;
-    float discriminant = b * b - 4 * a * c;
-
-    if (discriminant < 0) {
-        return false;
-    }
-
-    float t = (-b - sqrt(discriminant)) / (2 * a);
-    if (t < 0) {
-      t = (-b + sqrt(discriminant)) / (2 * a);
-    }
-    if (t < 0) {
-      return false;
-    }
-
-    intersect = ray.origin + t * ray.direction;
-    return true;
-}
-
-bool IntersectTriangles(const Ray &ray, const Triangle &triangle, glm::vec3 &intersect) {
-    glm::vec3 v0;
-    v0.x = triangle.v[0].position[0];
-    v0.y = triangle.v[0].position[1];
-    v0.z = triangle.v[0].position[2];
-
-    glm::vec3 v1;
-    v1.x = triangle.v[1].position[0];
-    v1.y = triangle.v[1].position[1];
-    v1.z = triangle.v[1].position[2];
-
-    glm::vec3 v2;
-    v2.x = triangle.v[2].position[0];
-    v2.y = triangle.v[2].position[1];
-    v2.z = triangle.v[2].position[2];
-
-    glm::vec3 edge1 = v1 - v0;
-    glm::vec3 edge2 = v2 - v0;
-    glm::vec3 h = glm::cross(edge1, edge2);
-    h = glm::normalize(h);
-    float d = glm::dot(h, v0);
-
-    if (glm::dot(h, ray.direction) > -0.000001 && glm::dot(h, ray.direction) < 0.000001){
-      return false;
-    }
-    float t = -(glm::dot(h, ray.origin) + d)/(glm::dot(h, ray.direction));
-
-    if (t > 0.00001) { // ray intersection
-        intersect = ray.origin + ray.direction * t;
-        return true;
-    }
-
-    return false;
+template <typename T>
+void clamp(T& value, T min, T max) {
+    value = std::max(min, std::min(value, max));
 }
 
 Triangle triangles[MAX_TRIANGLES];
@@ -185,11 +121,253 @@ void plot_pixel(int x,int y,unsigned char r,unsigned char g,unsigned char b);
 
 std::vector<Ray> cameraRays;
 
+bool IntersectSpheres(const Ray &ray, const Sphere &sphere, glm::vec3 &intersect) {
+    glm::vec3 oc;
+    oc.x = ray.origin.x - sphere.position[0];
+    oc.y = ray.origin.y - sphere.position[1];
+    oc.z = ray.origin.z - sphere.position[2];
+
+    float a = glm::dot(ray.direction, ray.direction);
+    float b = 2.0 * glm::dot(oc, ray.direction);
+    float c = glm::dot(oc, oc) - sphere.radius * sphere.radius;
+    float discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0) {
+        return false;
+    }
+
+    float t = (-b - sqrt(discriminant)) / (2 * a);
+    if (t < 0.00001) {
+      t = (-b + sqrt(discriminant)) / (2 * a);
+    }
+    if (t < 0.00001) {
+      return false;
+    }
+
+    intersect = ray.origin + t * ray.direction;
+    return true;
+}
+
+bool IntersectTriangles(const Ray &ray, const Triangle &triangle, glm::vec3 &intersect, glm::vec3& barycentricCoords) {
+    glm::vec3 v0;
+    v0.x = triangle.v[0].position[0];
+    v0.y = triangle.v[0].position[1];
+    v0.z = triangle.v[0].position[2];
+
+    glm::vec3 v1;
+    v1.x = triangle.v[1].position[0];
+    v1.y = triangle.v[1].position[1];
+    v1.z = triangle.v[1].position[2];
+
+    glm::vec3 v2;
+    v2.x = triangle.v[2].position[0];
+    v2.y = triangle.v[2].position[1];
+    v2.z = triangle.v[2].position[2];
+
+    // glm::vec3 edge1 = v1 - v0;
+    // glm::vec3 edge2 = v2 - v0;
+    // glm::vec3 n = glm::cross(edge1, edge2);
+    // n = glm::normalize(n);
+    // float d = -glm::dot(n, v0);
+
+    // if (glm::dot(n, ray.direction) > -0.0000000001 && glm::dot(n, ray.direction) < 0.00000000001){
+    //   return false;
+    // }
+    // float t = -(glm::dot(n, ray.origin) + d)/(glm::dot(n, ray.direction));
+
+    // if (t <= 0.0001) {
+    //   return false;
+    // }
+
+    // glm::vec3 tempIntersect = ray.origin + ray.direction * t;
+    // float triArea = 0.5 * glm::length(glm::cross((v1 - v0), (v2 - v0)));
+
+    // float a = 0.5 * glm::length(glm::cross((v1 - tempIntersect), (v2 - tempIntersect)))/triArea;
+    // float b = 0.5 * glm::length(glm::cross((tempIntersect - v0), (v2 - v0)))/triArea;
+    // float c = 1 - a - b;
+
+    // if (c < -0.000000001){
+    //   return false;
+    // }
+
+    // barycentricCoords.x = a;
+    // barycentricCoords.y = b;
+    // barycentricCoords.z = c;
+
+    // intersect = ray.origin + ray.direction * t;
+    // return true;
+
+    glm::vec3 edge1 = v1 - v0;
+    glm::vec3 edge2 = v2 - v0;
+    glm::vec3 pVec = glm::cross(ray.direction, edge2);
+    float det = glm::dot(edge1, pVec);
+    if (fabs(det) < 0.00000001) {
+      return false;
+    }
+    float invDet = 1.0f / det;
+
+    glm::vec3 tvec = ray.origin - v0;
+    float u = glm::dot(tvec, pVec) * invDet;
+    if (u < 0.0f || u > 1.0f) return false;
+
+    glm::vec3 qVec = glm::cross(tvec, edge1);
+    float v = glm::dot(ray.direction, qVec) * invDet;
+    if (v < 0.0f || u + v > 1.0f) return false;
+
+    float t = glm::dot(edge2, qVec) * invDet;
+    if (t <= 0) return false;
+
+    intersect = ray.origin + t * ray.direction;
+    barycentricCoords = glm::vec3(1.0f - u - v, u, v);
+
+    return true;
+}
+
+bool isShadowedSphere(const glm::vec3& point, const Light& light, const glm::vec3& lightDir, int index) {
+    for (int i = 0; i < num_spheres; ++i) {
+        glm::vec3 tempIntersect;
+        Ray shadowRay;
+        shadowRay.origin = point;
+        shadowRay.direction = lightDir;
+        glm::vec3 lightPos = glm::vec3(light.position[0], light.position[1], light.position[2]);
+        float lightDist = glm::length(lightPos - point);
+
+        if (IntersectSpheres(shadowRay, spheres[i], tempIntersect) && i != index) {
+            if (lightDist > glm::length(tempIntersect - point)){
+              return true;
+            }
+        }
+    }
+    for (int i = 0; i < num_triangles; ++i) {
+        glm::vec3 tempIntersect;
+        glm::vec3 baryCoordinate;
+        Ray shadowRay;
+        shadowRay.origin = point;
+        shadowRay.direction = lightDir;
+        glm::vec3 lightPos = glm::vec3(light.position[0], light.position[1], light.position[2]);
+        float lightDist = glm::length(lightPos - point);
+
+        if (IntersectTriangles(shadowRay, triangles[i], tempIntersect, baryCoordinate)) {
+            if (lightDist > glm::length(tempIntersect - point)){
+              return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool isShadowedTriangle(const glm::vec3& point, const Light& light, const glm::vec3& lightDir, int index) {
+    for (int i = 0; i < num_spheres; ++i) {
+        glm::vec3 tempIntersect;
+        Ray shadowRay;
+        shadowRay.origin = point;
+        shadowRay.direction = lightDir;
+        glm::vec3 lightPos = glm::vec3(light.position[0], light.position[1], light.position[2]);
+        float lightDist = glm::length(lightPos - point);
+
+        if (IntersectSpheres(shadowRay, spheres[i], tempIntersect)) {
+            if (lightDist > glm::length(tempIntersect - point)){
+              return true;
+            }
+        }
+    }
+    for (int i = 0; i < num_triangles; ++i) {
+        glm::vec3 tempIntersect;
+        glm::vec3 baryCoordinate;
+        Ray shadowRay;
+        shadowRay.origin = point;
+        shadowRay.direction = lightDir;
+        glm::vec3 lightPos = glm::vec3(light.position[0], light.position[1], light.position[2]);
+        float lightDist = glm::length(lightPos - point);
+        
+        if (IntersectTriangles(shadowRay, triangles[i], tempIntersect,baryCoordinate) && i != index) {
+            if (lightDist > glm::length(tempIntersect - point)){
+              return true;
+            }
+        }
+    }
+    return false;
+}
+
+glm::vec3 calculateLighting(const Sphere& sphere, const Light& light, const glm::vec3& intersect, int index) {
+    glm::vec3 n = glm::normalize(intersect - glm::vec3(sphere.position[0], sphere.position[1], sphere.position[2]));
+    glm::vec3 lightDirection = glm::normalize(glm::vec3(light.position[0], light.position[1], light.position[2]) - intersect);
+    
+    double lightMagnitude = std::max(static_cast<double>(glm::dot(lightDirection, n)), 0.0);
+    
+    if (isShadowedSphere(intersect, light, lightDirection, index)) {
+        return glm::vec3(0, 0, 0);
+    }
+    
+    //Reflection
+    glm::vec3 viewDir = glm::normalize(-intersect);
+    glm::vec3 reflectDir = glm::reflect(-lightDirection, n);
+    
+    // Specular component
+    double reflectionMagnitude = std::pow(std::max(static_cast<double>(glm::dot(reflectDir, viewDir)), 0.0), sphere.shininess);
+    
+    // Calculate the diffuse and specular contributions
+    glm::vec3 diffuse = glm::vec3(sphere.color_diffuse[0] * lightMagnitude, sphere.color_diffuse[1] * lightMagnitude, sphere.color_diffuse[2] * lightMagnitude);
+    glm::vec3 specular = glm::vec3(sphere.color_specular[0] * reflectionMagnitude, sphere.color_specular[1] * reflectionMagnitude, sphere.color_specular[2] * reflectionMagnitude);
+    
+    glm::vec3 color = glm::vec3(light.color[0], light.color[1], light.color[2]) * (diffuse + specular);
+    
+    //Clamp color components to the range [0, 1]
+    clamp(color.x, 0.0f, 1.0f);
+    clamp(color.y, 0.0f, 1.0f);
+    clamp(color.z, 0.0f, 1.0f);
+    
+    return color;
+}
+
+glm::vec3 calculateLighting(const Triangle& triangle, const Light& light, const glm::vec3& intersect, const glm::vec3& barycentricCoords, int index) {
+    // Interpolate the normal at the intersection point using barycentric coordinates
+    glm::vec3 n = glm::normalize(
+        barycentricCoords.x * glm::vec3(triangle.v[0].normal[0], triangle.v[0].normal[1], triangle.v[0].normal[2]) +
+        barycentricCoords.y * glm::vec3(triangle.v[1].normal[0], triangle.v[1].normal[1], triangle.v[1].normal[2]) +
+        barycentricCoords.z * glm::vec3(triangle.v[2].normal[0], triangle.v[2].normal[1], triangle.v[2].normal[2])
+    );
+    
+    glm::vec3 lightDirection = glm::normalize(glm::vec3(light.position[0], light.position[1], light.position[2]) - intersect);
+    double lightMagnitude = glm::clamp(static_cast<double>(glm::dot(lightDirection, n)), 0.0, 1.0);
+    
+    if (isShadowedTriangle(intersect, light, lightDirection, index)) {
+        return glm::vec3(0, 0, 0);
+    }
+    
+    glm::vec3 viewDir = glm::normalize(-intersect);
+    glm::vec3 reflectDir = glm::reflect(-lightDirection, n);
+    float shininess = barycentricCoords.x * triangle.v[0].shininess + barycentricCoords.y * triangle.v[1].shininess + barycentricCoords.z * triangle.v[2].shininess;
+    double reflectionMagnitude = std::pow(glm::clamp(static_cast<double>(glm::dot(reflectDir, viewDir)), 0.0, 1.0), shininess);
+    
+    // Interpolate diffuse and specular colors using the barycentric coordinates
+    glm::vec3 diffuseColor = 
+        barycentricCoords.x * glm::vec3(triangle.v[0].color_diffuse[0], triangle.v[0].color_diffuse[1], triangle.v[0].color_diffuse[2]) +
+        barycentricCoords.y * glm::vec3(triangle.v[1].color_diffuse[0], triangle.v[1].color_diffuse[1], triangle.v[1].color_diffuse[2]) +
+        barycentricCoords.z * glm::vec3(triangle.v[2].color_diffuse[0], triangle.v[2].color_diffuse[1], triangle.v[2].color_diffuse[2]);
+    
+    glm::vec3 specularColor = 
+        barycentricCoords.x * glm::vec3(triangle.v[0].color_specular[0], triangle.v[0].color_specular[1], triangle.v[0].color_specular[2]) +
+        barycentricCoords.y * glm::vec3(triangle.v[1].color_specular[0], triangle.v[1].color_specular[1], triangle.v[1].color_specular[2]) +
+        barycentricCoords.z * glm::vec3(triangle.v[2].color_specular[0], triangle.v[2].color_specular[1], triangle.v[2].color_specular[2]);
+    
+    glm::vec3 diffuse = glm::vec3(lightMagnitude * diffuseColor.x, lightMagnitude * diffuseColor.y, lightMagnitude * diffuseColor.z);
+    glm::vec3 specular = glm::vec3(reflectionMagnitude * specularColor.x, reflectionMagnitude * specularColor.y, reflectionMagnitude * specularColor.z);
+    
+    // Calculate final color using the light color
+    glm::vec3 color = 
+        glm::vec3(light.color[0], light.color[1], light.color[2]) * (diffuse + specular);
+    
+    color = glm::clamp(color, 0.0f, 1.0f);
+    
+    return color;
+}
+
 Ray createCameraRay(double x, double y){
-  double mapX = 2*(x/WIDTH)-1;
-  double mapY = 2*(y/HEIGHT)-1;
-  double xRay = mapX * aspectRatio*tan(fov/2.0);
-  double yRay = mapY * tan(fov/2.0);
+  double mapX = 2*((x+0.5)/WIDTH)-1;
+  double mapY = 2*((y+0.5)/HEIGHT)-1;
+  double xRay = mapX * aspectRatio*tan((M_PI * fov/180.0)/2.0);
+  double yRay = mapY * tan((M_PI * fov/180.0)/2.0);
   double zRay = -1.0;
 
   Ray newRay;
@@ -216,13 +394,73 @@ void draw_scene()
     glBegin(GL_POINTS);
     for(unsigned int y=0; y<HEIGHT; y++)
     {
-      Ray newRay = createCameraRay(x, y);
-      cameraRays.push_back(newRay);
-      // A simple R,G,B output for testing purposes.
-      // Modify these R,G,B colors to the values computed by your ray tracer.
-      unsigned char r = x % 256; // modify
-      unsigned char g = y % 256; // modify
-      unsigned char b = (x+y) % 256; // modify
+      Ray ray = createCameraRay(x, y);
+
+      glm::vec3 color(0, 0, 0); // Background color if no intersection
+      float minDist = std::numeric_limits<float>::infinity();
+      Sphere* closestSphere = nullptr;
+      Triangle* closestTriangle = nullptr;
+      glm::vec3 closestIntersect;
+      glm::vec3 closestBary;
+      int closestIndex;
+
+      // Check intersection with each sphere
+      for (int i = 0; i < num_spheres; i++) {
+          glm::vec3 intersect;
+          if (IntersectSpheres(ray, spheres[i], intersect)) {
+              float dist = glm::length(intersect - ray.origin);
+              if (dist < minDist) {
+                  minDist = dist;
+                  closestSphere = &spheres[i];
+                  closestTriangle = nullptr; // Reset closest triangle since sphere is closer
+                  closestIntersect = intersect;
+                  closestIndex = i;
+              }
+          }
+      }
+
+      // Check intersection with each triangle
+      for (int i = 0; i < num_triangles; i++) {
+          glm::vec3 intersect;
+          glm::vec3 bary;
+          if (IntersectTriangles(ray, triangles[i], intersect, bary)) {
+              float dist = glm::length(intersect - ray.origin);
+              if (dist < minDist) {
+                  minDist = dist;
+                  closestTriangle = &triangles[i];
+                  closestSphere = nullptr; 
+                  closestIntersect = intersect;
+                  closestBary = bary;
+                  closestIndex = i;
+              }
+          }
+      }
+
+      // Calculate the lighting based on the closest intersected object
+      if (closestSphere) {
+          // Calculate lighting for the closest sphere
+          for (int i = 0; i < num_lights; i++) {
+              Light light = lights[i];
+              color += calculateLighting(*closestSphere, light, closestIntersect, closestIndex);
+          }
+      } else if (closestTriangle) {
+          // Calculate lighting for the closest triangle
+          for (int i = 0; i < num_lights; i++) {
+              Light light = lights[i];
+              color += calculateLighting(*closestTriangle, light, closestIntersect, closestBary, closestIndex);
+          }
+      }
+
+      color.x += ambient_light[0];
+      color.y += ambient_light[1];
+      color.z += ambient_light[2];
+
+      // Convert float color to 8-bit color
+      unsigned char r = static_cast<unsigned char>(glm::clamp(color.x, 0.0f, 1.0f) * 255);
+      unsigned char g = static_cast<unsigned char>(glm::clamp(color.y, 0.0f, 1.0f) * 255);
+      unsigned char b = static_cast<unsigned char>(glm::clamp(color.z, 0.0f, 1.0f) * 255);
+
+      // Plot pixel
       plot_pixel(x, y, r, g, b);
     }
     glEnd();
